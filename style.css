@@ -1,0 +1,14 @@
+body {
+    background-color: #f3f5f9;
+    font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+  }
+  
+  h1 {
+    font-weight: 600;
+  }
+  
+  input::placeholder {
+    font-style: italic;
+    color: #6c757d;
+  }
+  
