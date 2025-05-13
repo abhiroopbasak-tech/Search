@@ -1,82 +1,29 @@
-let allData = [];
-let currentResults = [];  // This will store the data after the initial search
-let headers = [];
+let originalData = [];
+let headers = ["Anno", "Vol.", "Carta", "Nome", "Categoria", "Titolo categoria", "Sottocategoria"];
 
 async function loadTSV() {
   const response = await fetch("data/dataset.tsv");
   const text = await response.text();
 
-  const rows = text.split(/\r?\n/).filter(line => line.trim() !== "");
-  headers = rows[0].split("\t");
-  allData = rows.slice(1).map(row => row.split("\t"));
+  const rows = text.split(/\r?\n/).filter(line => line.trim());
+  const rawHeaders = rows[0].split("\t");
+  const dataRows = rows.slice(1).map(row => row.split("\t"));
 
-  populateDropdown(headers);
-  currentResults = allData;  // Initialize with full dataset
-  renderTable(currentResults);  // Render full dataset initially
-}
+  const idx = (name) => rawHeaders.indexOf(name);
 
-function populateDropdown(headers) {
-  const select = document.getElementById("fieldSelect");
-  const refineSelect = document.getElementById("refineFieldSelect");
-
-  // Populate both main and refine dropdowns with field names
-  headers.forEach(header => {
-    const option = document.createElement("option");
-    option.value = header;
-    option.textContent = header;  // Keep field names in Italian
-    select.appendChild(option);
-    const refineOption = document.createElement("option");
-    refineOption.value = header;
-    refineOption.textContent = header;
-    refineSelect.appendChild(refineOption);
+  originalData = dataRows.map(row => {
+    return {
+      "Anno": row[idx("Anno")],
+      "Vol.": row[idx("Vol.")],
+      "Carta": [row[idx("Carta-nr")], row[idx("Carta-lett")]].filter(Boolean).join(""),
+      "Nome": row[idx("Nome")],
+      "Categoria": row[idx("Categoria")],
+      "Titolo categoria": row[idx("Titolo categoria")],
+      "Sottocategoria": [row[idx("Sottocategoria")], row[idx("Titolo sottocategoria")]].filter(Boolean).join(" - ")
+    };
   });
-}
 
-document.getElementById("searchForm").addEventListener("submit", function (e) {
-  e.preventDefault();
-  const [field, query] = getSearchInput();
-  if (!field || !query) return;
-
-  // Search the full dataset
-  const fieldIndex = headers.indexOf(field);
-  currentResults = allData.filter(row => row[fieldIndex]?.toLowerCase().includes(query));
-  renderTable(currentResults);  // Render filtered results
-});
-
-document.getElementById("refineBtn").addEventListener("click", function () {
-  // Show refine search box when Refine is clicked
-  document.getElementById("refineSearchBox").style.display = "block";
-});
-
-document.getElementById("refineSearchBtn").addEventListener("click", function () {
-  const [field, query] = getRefineSearchInput();
-  if (!field || !query) return;
-
-  // Apply the refine search on currentResults (already filtered by the first search)
-  const fieldIndex = headers.indexOf(field);
-  currentResults = currentResults.filter(row => row[fieldIndex]?.toLowerCase().includes(query));
-
-  // Render the refined results
-  renderTable(currentResults);
-});
-
-document.getElementById("resetBtn").addEventListener("click", () => {
-  currentResults = allData;  // Reset to full dataset
-  renderTable(currentResults);  // Render the full dataset again
-  document.getElementById("searchForm").reset();  // Clear the search inputs
-  document.getElementById("refineSearchBox").style.display = "none";  // Hide refine search box
-});
-
-function getSearchInput() {
-  const field = document.getElementById("fieldSelect").value;
-  const query = document.getElementById("searchInput").value.trim().toLowerCase();
-  return [field, query];
-}
-
-function getRefineSearchInput() {
-  const field = document.getElementById("refineFieldSelect").value;
-  const query = document.getElementById("refineSearchInput").value.trim().toLowerCase();
-  return [field, query];
+  renderTable(originalData);
 }
 
 function renderTable(data) {
@@ -85,25 +32,51 @@ function renderTable(data) {
   tableHeader.innerHTML = "";
   tableBody.innerHTML = "";
 
-  // Render header row
   const headerRow = document.createElement("tr");
-  headers.forEach(header => {
+  headers.forEach(h => {
     const th = document.createElement("th");
-    th.textContent = header;
+    th.textContent = h;
     headerRow.appendChild(th);
   });
   tableHeader.appendChild(headerRow);
 
-  // Render data rows
   data.forEach(row => {
     const tr = document.createElement("tr");
-    row.forEach(cell => {
+    headers.forEach(h => {
       const td = document.createElement("td");
-      td.textContent = cell;
+      td.textContent = row[h] || "";
       tr.appendChild(td);
     });
     tableBody.appendChild(tr);
   });
 }
+
+document.getElementById("multiSearchForm").addEventListener("submit", function (e) {
+  e.preventDefault();
+  const formData = new FormData(e.target);
+  const filters = {};
+
+  for (let [key, value] of formData.entries()) {
+    if (value.trim()) filters[key] = value.trim().toLowerCase();
+  }
+
+  const filtered = originalData.filter(row =>
+    Object.entries(filters).every(([field, val]) => {
+      const cell = row[field]?.toLowerCase() || "";
+      if (["Nome", "Titolo categoria"].includes(field)) {
+        return cell.includes(val); // partial match for free-text fields
+      } else {
+        return cell === val; // exact match for structured fields
+      }
+    })
+  );
+
+  renderTable(filtered);
+});
+
+document.getElementById("resetBtn").addEventListener("click", () => {
+  document.getElementById("multiSearchForm").reset();
+  renderTable(originalData);
+});
 
 window.addEventListener("DOMContentLoaded", loadTSV);
