@@ -1,6 +1,18 @@
 let originalData = [];
 let headers = ["Anno", "Vol.", "Carta", "Nome", "Categoria", "Titolo categoria", "Sottocategoria"];
 
+// Helper: fill dropdown with unique sorted options from a field
+function fillDropdown(id, field) {
+  const select = document.getElementById(id);
+  const uniqueValues = [...new Set(originalData.map(row => row[field]).filter(Boolean))].sort();
+  uniqueValues.forEach(val => {
+    const option = document.createElement("option");
+    option.value = val;
+    option.textContent = val;
+    select.appendChild(option);
+  });
+}
+
 async function loadTSV() {
   const response = await fetch("data/dataset.tsv");
   const text = await response.text();
@@ -22,6 +34,11 @@ async function loadTSV() {
       "Sottocategoria": [row[idx("Sottocategoria")], row[idx("Titolo sottocategoria")]].filter(Boolean).join(" - ")
     };
   });
+
+  // Fill dropdowns with unique options
+  fillDropdown("filterVol", "Vol.");
+  fillDropdown("filterCarta", "Carta");
+  fillDropdown("filterCategoria", "Categoria");
 
   renderTable(originalData);
 }
@@ -60,22 +77,36 @@ document.getElementById("multiSearchForm").addEventListener("submit", function (
     if (value.trim()) filters[key] = value.trim().toLowerCase();
   }
 
-  const filtered = originalData.filter(row =>
-    Object.entries(filters).every(([field, val]) => {
-      const cell = row[field]?.toLowerCase() || "";
-      if (["Nome", "Titolo categoria"].includes(field)) {
-        return cell.includes(val); // partial match for free-text fields
+  const fullTextTerm = document.getElementById("fullTextSearch").value.trim().toLowerCase();
+
+  // Fields using dropdown exact match
+  const dropdownExactMatchFields = ["Vol.", "Carta", "Categoria"];
+
+  const filtered = originalData.filter(row => {
+    // Check field filters (text fields partial, dropdown exact)
+    const matchesFields = Object.entries(filters).every(([field, val]) => {
+      const cell = (row[field] || "").toLowerCase();
+      if (dropdownExactMatchFields.includes(field)) {
+        return cell === val;  // exact match for dropdown
       } else {
-        return cell === val; // exact match for structured fields
+        return cell.includes(val); // substring match for text inputs
       }
-    })
-  );
+    });
+
+    // Check full-text search across all fields as substring
+    const matchesText = fullTextTerm
+      ? Object.values(row).some(v => v?.toLowerCase().includes(fullTextTerm))
+      : true;
+
+    return matchesFields && matchesText;
+  });
 
   renderTable(filtered);
 });
 
 document.getElementById("resetBtn").addEventListener("click", () => {
   document.getElementById("multiSearchForm").reset();
+  document.getElementById("fullTextSearch").value = "";
   renderTable(originalData);
 });
 

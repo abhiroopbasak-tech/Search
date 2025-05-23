@@ -16,33 +16,51 @@
         <label class="form-label">Anno</label>
         <input type="text" class="form-control" name="Anno" />
       </div>
+
       <div class="col-md-3">
         <label class="form-label">Vol.</label>
-        <input type="text" class="form-control" name="Vol." />
+        <select class="form-select" name="Vol." id="filterVol">
+          <option value="">-- All --</option>
+        </select>
       </div>
+
       <div class="col-md-3">
         <label class="form-label">Carta</label>
-        <input type="text" class="form-control" name="Carta" />
+        <select class="form-select" name="Carta" id="filterCarta">
+          <option value="">-- All --</option>
+        </select>
       </div>
+
       <div class="col-md-3">
         <label class="form-label">Nome</label>
         <input type="text" class="form-control" name="Nome" />
       </div>
+
       <div class="col-md-3">
         <label class="form-label">Categoria</label>
-        <input type="text" class="form-control" name="Categoria" />
+        <select class="form-select" name="Categoria" id="filterCategoria">
+          <option value="">-- All --</option>
+        </select>
       </div>
+
       <div class="col-md-3">
         <label class="form-label">Titolo categoria</label>
         <input type="text" class="form-control" name="Titolo categoria" />
       </div>
+
       <div class="col-md-3">
         <label class="form-label">Sottocategoria</label>
         <input type="text" class="form-control" name="Sottocategoria" />
       </div>
+
       <div class="col-md-12">
-        <button type="submit" class="btn btn-primary">Search</button>
-        <button type="button" class="btn btn-secondary" id="resetBtn">Reset</button>
+        <label class="form-label">Full Text Search</label>
+        <input type="text" id="fullTextSearch" class="form-control" placeholder="Search all fields..." />
+      </div>
+
+      <div class="col-md-12">
+        <button type="submit" class="btn btn-primary mt-3">Search</button>
+        <button type="button" class="btn btn-secondary mt-3" id="resetBtn">Reset</button>
       </div>
     </form>
 
