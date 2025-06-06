@@ -1,7 +1,6 @@
 let originalData = [];
 let headers = ["Anno", "Vol.", "Carta", "Nome", "Categoria", "Titolo categoria", "Sottocategoria"];
 
-// Helper: fill dropdown with unique sorted options from a field
 function fillDropdown(id, field) {
   const select = document.getElementById(id);
   const uniqueValues = [...new Set(originalData.map(row => row[field]).filter(Boolean))].sort();
@@ -25,17 +24,16 @@ async function loadTSV() {
 
   originalData = dataRows.map(row => {
     return {
-      "Anno": row[idx("Anno")],
-      "Vol.": row[idx("Vol.")],
-      "Carta": [row[idx("Carta-nr")], row[idx("Carta-lett")]].filter(Boolean).join(""),
-      "Nome": row[idx("Nome")],
-      "Categoria": row[idx("Categoria")],
-      "Titolo categoria": row[idx("Titolo categoria")],
-      "Sottocategoria": [row[idx("Sottocategoria")], row[idx("Titolo sottocategoria")]].filter(Boolean).join(" - ")
+      "Anno": (row[idx("Anno")] || "").toLowerCase(),
+      "Vol.": (row[idx("Vol.")] || "").toLowerCase(),
+      "Carta": [row[idx("Carta-nr")], row[idx("Carta-lett")]].filter(Boolean).join("").toLowerCase(),
+      "Nome": (row[idx("Nome")] || "").toLowerCase(),
+      "Categoria": (row[idx("Categoria")] || "").toLowerCase(),
+      "Titolo categoria": (row[idx("Titolo categoria")] || "").toLowerCase(),
+      "Sottocategoria": [row[idx("Sottocategoria")], row[idx("Titolo sottocategoria")]].filter(Boolean).join(" - ").toLowerCase()
     };
   });
 
-  // Fill dropdowns with unique options
   fillDropdown("filterVol", "Vol.");
   fillDropdown("filterCarta", "Carta");
   fillDropdown("filterCategoria", "Categoria");
@@ -68,6 +66,27 @@ function renderTable(data) {
   });
 }
 
+// Build regex from search term (wildcards and phrases)
+function buildRegex(searchTerm) {
+  if (!searchTerm) return null;
+
+  // Exact phrase search
+  if (searchTerm.startsWith('"') && searchTerm.endsWith('"')) {
+    const phrase = searchTerm.slice(1, -1).replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
+    return new RegExp(phrase, 'i');
+  }
+
+  // Wildcards: * -> .* , ? -> .?
+  let regexPattern = searchTerm
+    .replace(/[-\/\\^$+?.()|[\]{}]/g, '\\$&') // Escape regex special chars except * and ?
+    .replace(/\\\*/g, '.*')                  // Already escaped *
+    .replace(/\\\?/g, '.?');                 // Already escaped ?
+
+  regexPattern = regexPattern.replace(/\*/g, '.*').replace(/\?/g, '.?');
+
+  return new RegExp(regexPattern, 'i');
+}
+
 document.getElementById("multiSearchForm").addEventListener("submit", function (e) {
   e.preventDefault();
   const formData = new FormData(e.target);
@@ -78,28 +97,45 @@ document.getElementById("multiSearchForm").addEventListener("submit", function (
   }
 
   const fullTextTerm = document.getElementById("fullTextSearch").value.trim().toLowerCase();
+  const fullTextRegex = buildRegex(fullTextTerm);
 
-  // Fields using dropdown exact match
   const dropdownExactMatchFields = ["Vol.", "Carta", "Categoria"];
 
-  const filtered = originalData.filter(row => {
-    // Check field filters (text fields partial, dropdown exact)
-    const matchesFields = Object.entries(filters).every(([field, val]) => {
+  let filtered = originalData.map(row => {
+    let matchCount = 0;
+    let matchesFields = true;
+
+    for (const [field, val] of Object.entries(filters)) {
       const cell = (row[field] || "").toLowerCase();
       if (dropdownExactMatchFields.includes(field)) {
-        return cell === val;  // exact match for dropdown
+        if (cell !== val) {
+          matchesFields = false;
+          break;
+        } else {
+          matchCount++;
+        }
       } else {
-        return cell.includes(val); // substring match for text inputs
+        const regex = buildRegex(val);
+        if (!regex || !regex.test(cell)) {
+          matchesFields = false;
+          break;
+        } else {
+          matchCount++;
+        }
       }
-    });
+    }
 
-    // Check full-text search across all fields as substring
-    const matchesText = fullTextTerm
-      ? Object.values(row).some(v => v?.toLowerCase().includes(fullTextTerm))
-      : true;
+    let matchesText = true;
+    if (fullTextRegex) {
+      matchesText = Object.values(row).some(v => fullTextRegex.test(v));
+      if (matchesText) matchCount++;
+    }
 
-    return matchesFields && matchesText;
-  });
+    return matchesFields && matchesText ? { ...row, __matchCount: matchCount } : null;
+  }).filter(Boolean);
+
+  // Sort by descending match count
+  filtered.sort((a, b) => b.__matchCount - a.__matchCount);
 
   renderTable(filtered);
 });
