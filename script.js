@@ -1,6 +1,7 @@
 let originalData = [];
 let headers = ["Anno", "Vol.", "Carta", "Nome", "Categoria", "Titolo categoria", "Sottocategoria"];
 
+// Helper: fill dropdown with unique sorted options from a field
 function fillDropdown(id, field) {
   const select = document.getElementById(id);
   const uniqueValues = [...new Set(originalData.map(row => row[field]).filter(Boolean))].sort();
@@ -66,25 +67,33 @@ function renderTable(data) {
   });
 }
 
-// Build regex from search term (wildcards and phrases)
-function buildRegex(searchTerm) {
-  if (!searchTerm) return null;
+function parseFullTextQuery(input) {
+  const matches = [];
+  const phraseRegex = /"([^"]+)"/g;
+  let match;
 
-  // Exact phrase search
-  if (searchTerm.startsWith('"') && searchTerm.endsWith('"')) {
-    const phrase = searchTerm.slice(1, -1).replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
-    return new RegExp(phrase, 'i');
+  // Extract quoted phrases
+  while ((match = phraseRegex.exec(input)) !== null) {
+    matches.push({
+      type: "phrase",
+      regex: new RegExp(match[1].replace(/[-/\\^$*+?.()|[\]{}]/g, '\\$&'), "i")
+    });
   }
 
-  // Wildcards: * -> .* , ? -> .?
-  let regexPattern = searchTerm
-    .replace(/[-\/\\^$+?.()|[\]{}]/g, '\\$&') // Escape regex special chars except * and ?
-    .replace(/\\\*/g, '.*')                  // Already escaped *
-    .replace(/\\\?/g, '.?');                 // Already escaped ?
+  // Remove quoted phrases from input
+  const remaining = input.replace(phraseRegex, "").trim();
 
-  regexPattern = regexPattern.replace(/\*/g, '.*').replace(/\?/g, '.?');
+  // Add unquoted words as wildcard search terms
+  if (remaining) {
+    const words = remaining.split(/\s+/);
+    words.forEach(word => {
+      const escaped = word.replace(/[-/\\^$+?.()|[\]{}]/g, '\\$&')
+                          .replace(/\*/g, ".*").replace(/\?/g, ".?");
+      matches.push({ type: "word", regex: new RegExp(escaped, "i") });
+    });
+  }
 
-  return new RegExp(regexPattern, 'i');
+  return matches;
 }
 
 document.getElementById("multiSearchForm").addEventListener("submit", function (e) {
@@ -96,46 +105,51 @@ document.getElementById("multiSearchForm").addEventListener("submit", function (
     if (value.trim()) filters[key] = value.trim().toLowerCase();
   }
 
-  const fullTextTerm = document.getElementById("fullTextSearch").value.trim().toLowerCase();
-  const fullTextRegex = buildRegex(fullTextTerm);
+  const fullTextInput = document.getElementById("fullTextSearch").value.trim().toLowerCase();
+  const fullTextQueries = parseFullTextQuery(fullTextInput);
 
   const dropdownExactMatchFields = ["Vol.", "Carta", "Categoria"];
 
-  let filtered = originalData.map(row => {
-    let matchCount = 0;
-    let matchesFields = true;
+  const filtered = originalData
+    .map(row => {
+      let matchCount = 0;
 
-    for (const [field, val] of Object.entries(filters)) {
-      const cell = (row[field] || "").toLowerCase();
-      if (dropdownExactMatchFields.includes(field)) {
-        if (cell !== val) {
-          matchesFields = false;
-          break;
+      const matchesFields = Object.entries(filters).every(([field, val]) => {
+        const cell = (row[field] || "");
+        if (dropdownExactMatchFields.includes(field)) {
+          if (cell === val) {
+            matchCount++;
+            return true;
+          }
+          return false;
         } else {
-          matchCount++;
+          const escaped = val.replace(/[-/\\^$+?.()|[\]{}]/g, '\\$&')
+                             .replace(/\*/g, ".*").replace(/\?/g, ".?");
+          const regex = new RegExp(escaped, "i");
+          if (regex.test(cell)) {
+            matchCount++;
+            return true;
+          }
+          return false;
         }
-      } else {
-        const regex = buildRegex(val);
-        if (!regex || !regex.test(cell)) {
-          matchesFields = false;
-          break;
-        } else {
-          matchCount++;
-        }
+      });
+
+      const matchesText = fullTextQueries.every(({ regex }) =>
+        Object.values(row).some(v => {
+          const result = regex.test(v || "");
+          if (result) matchCount++;
+          return result;
+        })
+      );
+
+      if (matchesFields && matchesText) {
+        return { row, matchCount };
       }
-    }
-
-    let matchesText = true;
-    if (fullTextRegex) {
-      matchesText = Object.values(row).some(v => fullTextRegex.test(v));
-      if (matchesText) matchCount++;
-    }
-
-    return matchesFields && matchesText ? { ...row, __matchCount: matchCount } : null;
-  }).filter(Boolean);
-
-  // Sort by descending match count
-  filtered.sort((a, b) => b.__matchCount - a.__matchCount);
+      return null;
+    })
+    .filter(Boolean)
+    .sort((a, b) => b.matchCount - a.matchCount)
+    .map(r => r.row);
 
   renderTable(filtered);
 });
