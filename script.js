@@ -48,7 +48,11 @@ function renderTable(data) {
   tableHeader.innerHTML = "";
   tableBody.innerHTML = "";
 
+  // Add Link column at the start
   const headerRow = document.createElement("tr");
+  const thLink = document.createElement("th");
+  thLink.textContent = "Link";
+  headerRow.appendChild(thLink);
   headers.forEach(h => {
     const th = document.createElement("th");
     th.textContent = h;
@@ -56,16 +60,45 @@ function renderTable(data) {
   });
   tableHeader.appendChild(headerRow);
 
+  const romanToArabic = {
+    i: 1, ii: 2, iii: 3, iv: 4, v: 5,
+    vi: 6, vii: 7, viii: 8, ix: 9, x: 10
+  };
+
   data.forEach(row => {
     const tr = document.createElement("tr");
+
+    const volRoman = row["Vol."];
+    const cartaRaw = row["Carta"];
+
+    const volume = romanToArabic[volRoman] || 1;
+
+    // Extract number part of Carta (e.g., "2a" → 2)
+    const cartaMatch = cartaRaw.match(/^(\d{1,2})[a-z]?$/i);
+    if (!cartaMatch) return;  // skip invalid Carta
+
+    const cartaNum = cartaMatch[1].padStart(2, "0"); // "2" → "02"
+
+    const link = `https://stampa.lei-digitale.it/aleic/?volume=${volume}&page=Intro${cartaNum}_01`;
+
+    const tdLink = document.createElement("td");
+    tdLink.innerHTML = `
+      <a href="${link}" target="_blank" title="Open page">
+        🔗
+      </a>`;
+    tr.appendChild(tdLink);
+
     headers.forEach(h => {
       const td = document.createElement("td");
       td.textContent = row[h] || "";
       tr.appendChild(td);
     });
+
     tableBody.appendChild(tr);
   });
 }
+
+
 
 function parseFullTextQuery(input) {
   const matches = [];
